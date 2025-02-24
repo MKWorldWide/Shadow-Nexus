@@ -1,0 +1,98 @@
+version: 1
+applications:
+  - appRoot: .
+    backend:
+      phases:
+        preBuild:
+          commands:
+            - pip install poetry
+            - poetry config virtualenvs.create false
+            - poetry install
+        build:
+          commands:
+            - poetry run pytest tests/
+            - poetry run coverage run -m pytest tests/
+            - poetry run coverage report
+        postBuild:
+          commands:
+            - echo "Backend build completed"
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - echo "No frontend build required"
+        build:
+          commands:
+            - echo "No frontend build required"
+        postBuild:
+          commands:
+            - echo "No frontend build required"
+      artifacts:
+        baseDirectory: /
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .venv/**/*
+    environmentVariables:
+      - name: PYTHONPATH
+        value: $PYTHONPATH:.
+      - name: DISCORD_BOT_TOKEN
+        value: ${DISCORD_BOT_TOKEN}
+      - name: TELEGRAM_BOT_TOKEN
+        value: ${TELEGRAM_BOT_TOKEN}
+      - name: EMAIL_USERNAME
+        value: ${EMAIL_USERNAME}
+      - name: EMAIL_PASSWORD
+        value: ${EMAIL_PASSWORD}
+      - name: EMAIL_SERVER
+        value: ${EMAIL_SERVER}
+      - name: EMAIL_PORT
+        value: ${EMAIL_PORT}
+      - name: TRADINGVIEW_WEBHOOK_SECRET
+        value: ${TRADINGVIEW_WEBHOOK_SECRET}
+      - name: ENCRYPTION_KEY
+        value: ${ENCRYPTION_KEY}
+      - name: PHANTOM_DATA_BUCKET
+        value: ${PHANTOM_DATA_BUCKET}
+      - name: DATA_PROCESSOR_LAMBDA
+        value: ${DATA_PROCESSOR_LAMBDA}
+      - name: DATA_TABLE
+        value: ${DATA_TABLE}
+      - name: DATA_BUCKET
+        value: ${DATA_BUCKET}
+      - name: TRADE_HISTORY_TABLE
+        value: ${TRADE_HISTORY_TABLE}
+      - name: TRADE_EXECUTION_LAMBDA
+        value: ${TRADE_EXECUTION_LAMBDA}
+      - name: AWS_REGION
+        value: ${AWS_REGION}
+    customHeaders:
+      - pattern: '**/*'
+        headers:
+          - key: 'Strict-Transport-Security'
+            value: 'max-age=31536000; includeSubDomains'
+          - key: 'X-Frame-Options'
+            value: 'DENY'
+          - key: 'X-Content-Type-Options'
+            value: 'nosniff'
+          - key: 'X-XSS-Protection'
+            value: '1; mode=block'
+          - key: 'Referrer-Policy'
+            value: 'strict-origin-when-cross-origin'
+          - key: 'Content-Security-Policy'
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+test:
+  phases:
+    preTest:
+      commands:
+        - pip install pytest
+        - pip install pytest-cov
+    test:
+      commands:
+        - pytest tests/ --cov=./ --cov-report=html
+  artifacts:
+    baseDirectory: coverage
+    files:
+      - '**/*'
+      - coverage.xml 
