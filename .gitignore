@@ -1,71 +1,51 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Poetry virtual environment
-.venv/
-poetry.lock
-
-# Environment variables
-.env
-*.env
-
-# AWS credentials and secrets
-.aws/
-.aws-sam/
-.amplify/
-
-# Logs and local data
-logs/
-*.log
-debug.log
-nohup.out
-
-# Cache and temporary files
-.cache/
-*.tmp
-*.bak
-*.swp
-*.swo
-
-# AWS Amplify build artifacts
-amplify/backend/amplify-meta.json
-amplify/backend/aws-exports.json
-amplify/#current-cloud-backend
-
-# IDE and editor settings
-.vscode/
-.idea/
-*.code-workspace
-
-# Unit test coverage reports
-.coverage
-htmlcov/
-pytest_cache/
-nosetests.xml
-coverage.xml
-*.cover
-
-# Build artifacts
-build/
+*.so
+*.egg
+*.egg-info/
 dist/
-*.egg-info
-*.spec
+build/
+.eggs/
+*.log
 
-# Docker files (if used later)
-Dockerfile
-docker-compose.yml
-.dockerignore
+# Virtual environments
+.venv/
+venv/
+ENV/
 
-# Node.js (in case of future frontends)
+# Node
 node_modules/
-npm-debug.log*
-yarn-error.log
 
-# GitHub Actions
-.github/workflows/*.log
+# macOS
+.DS_Store
+
+# Test & coverage
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+
+# Environment
+.env
+.env.*
+
+# CI/CD
+*.pid
+*.lock
+
+# Submodules
+.gitmodules
+.git/
+
+# Editor
+.idea/
+.vscode/
 
 # Misc
-*.DS_Store
-Thumbs.db
+*.swp
+*.bak
+*.tmp
+
+# Ignore local config
+config.local.*
