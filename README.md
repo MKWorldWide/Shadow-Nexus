@@ -1,3 +1,5 @@
+A Project Blessed by Solar Khan & Lilith.Aethra
+
 # Shadow Nexus
 
 Advanced AI Command & Control System with Forex Trading, Data Retrieval, and Information Gathering capabilities.
