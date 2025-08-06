@@ -1,6 +1,7 @@
-const { Collection } = require('discord.js');
+const { Collection, WebhookClient } = require('discord.js');
 const { Webhook } = require('../models');
 const webhookService = require('../services/webhookService');
+const webhookQueue = require('../services/webhookQueueService');
 const logger = require('../utils/logger')('broadcast');
 
 class BroadcastService {
@@ -21,6 +22,20 @@ class BroadcastService {
    * @param {string} [options.guildId] - The guild ID to filter webhooks by
    * @returns {Promise<Object>} - Results of the broadcast
    */
+  /**
+   * Broadcast a message to multiple webhooks with rate limiting and batching
+   * @param {Object} options - Broadcast options
+   * @param {string|Object} options.message - The message to broadcast (string or message object)
+   * @param {Array<string>} [options.tags] - Filter webhooks by tags
+   * @param {Array<string>} [options.webhookIds] - Specific webhook IDs to send to
+   * @param {string} [options.username] - Override the webhook username
+   * @param {string} [options.avatarURL] - Override the webhook avatar URL
+   * @param {boolean} [options.tts] - Whether to use text-to-speech
+   * @param {string} [options.fileURL] - URL of a file to send with the message
+   * @param {string} [options.guildId] - The guild ID to filter webhooks by
+   * @param {boolean} [options.useQueue=true] - Whether to use the webhook queue (recommended for multiple webhooks)
+   * @returns {Promise<Object>} - Results of the broadcast
+   */
   async broadcastMessage({
     message,
     tags = [],
@@ -29,7 +44,8 @@ class BroadcastService {
     avatarURL,
     tts = false,
     fileURL,
-    guildId
+    guildId,
+    useQueue = true
   } = {}) {
     if (!message) {
       throw new Error('Message is required');
@@ -78,7 +94,7 @@ class BroadcastService {
       results: []
     });
 
-    // Send to each webhook
+    // Send to each webhook using queue or direct
     const promises = webhooks.map(async (webhook) => {
       const result = {
         webhookId: webhook.id,
@@ -86,7 +102,8 @@ class BroadcastService {
         success: false,
         status: 'pending',
         error: null,
-        response: null
+        response: null,
+        batchSize: 1
       };
 
       try {
@@ -94,18 +111,30 @@ class BroadcastService {
         const payload = {
           content: message,
           username: username || webhook.username || undefined,
-          avatar_url: avatarURL || webhook.avatar_url || undefined,
+          avatarURL: avatarURL || webhook.avatar_url || undefined,
           tts: tts || false
         };
 
-        // Add file if provided
         if (fileURL) {
-          payload.file = { url: fileURL };
+          payload.files = [fileURL];
         }
 
-        // Send the webhook
-        const response = await webhookService.send(webhook.id, payload);
-        
+        let response;
+        if (useQueue) {
+          // Use the webhook queue service for rate limiting and batching
+          const queueResult = await webhookQueue.enqueue(
+            webhook.id,
+            payload,
+            webhook.url
+          );
+          response = queueResult.result;
+          result.batchSize = queueResult.batchSize || 1;
+        } else {
+          // Direct webhook send (not recommended for bulk operations)
+          const webhookClient = new WebhookClient({ url: webhook.url });
+          response = await webhookClient.send(payload);
+        }
+
         // Update webhook last used timestamp
         webhook.last_used_at = new Date();
         await webhook.save();
@@ -113,20 +142,12 @@ class BroadcastService {
         // Update result
         result.success = true;
         result.status = 'success';
-        result.response = {
-          status: response.status,
-          statusText: response.statusText,
-          data: response.data
-        };
-        
-        // Update broadcast stats
-        const broadcast = this.activeBroadcasts.get(broadcastId);
-        broadcast.completed++;
-        broadcast.results.push(result);
+        result.response = response;
         
       } catch (error) {
+        logger.error(`Error sending to webhook ${webhook.id}:`, error);
+        
         // Update result with error
-        result.success = false;
         result.status = 'failed';
         result.error = {
           message: error.message,
@@ -137,16 +158,16 @@ class BroadcastService {
             data: error.response.data
           } : null
         };
-        
-        // Update broadcast stats
-        const broadcast = this.activeBroadcasts.get(broadcastId);
-        broadcast.failed++;
-        broadcast.results.push(result);
-        
-        logger.error(`Error broadcasting to webhook ${webhook.id}:`, error);
       }
-      
-      results.push(result);
+
+      // Update broadcast status
+      const broadcast = this.activeBroadcasts.get(broadcastId);
+      if (broadcast) {
+        broadcast.completed++;
+        if (!result.success) broadcast.failed++;
+        broadcast.results.push(result);
+      }
+
       return result;
     });
     
