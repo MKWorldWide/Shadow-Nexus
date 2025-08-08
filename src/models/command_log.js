@@ -19,7 +19,7 @@ module.exports = (sequelize) => {
       allowNull: true
     },
     options: {
-      type: DataTypes.JSONB,
+      type: DataTypes.JSON,
       defaultValue: {}
     },
     status: {
@@ -31,11 +31,11 @@ module.exports = (sequelize) => {
       allowNull: true
     },
     response: {
-      type: DataTypes.JSONB,
+      type: DataTypes.JSON,
       allowNull: true
     },
     metadata: {
-      type: DataTypes.JSONB,
+      type: DataTypes.JSON,
       defaultValue: {}
     },
     started_at: {

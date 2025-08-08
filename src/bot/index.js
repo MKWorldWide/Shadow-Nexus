@@ -4,34 +4,12 @@ const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 const fs = require('fs');
 const path = require('path');
-const winston = require('winston');
-const { WebhookAddCommand, WebhookListCommand, WebhookTestCommand, WebhookDeleteCommand, WebhookSendCommand } = require('./commands/webhook');
+const logger = require('../config/logger');
 const { sequelize } = require('../services/database');
+const HealthMonitor = require('../services/healthMonitor');
 
-// Configure logger
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    }),
-    new winston.transports.File({ 
-      filename: process.env.LOG_FILE_PATH || 'logs/shadow-nexus.log',
-      maxsize: 5 * 1024 * 1024, // 5MB
-      maxFiles: 5,
-      tailable: true
-    })
-  ]
-});
+// Log startup
+logger.info('Starting Shadow Nexus bot...');
 
 // Create Discord client with required intents
 const client = new Client({
@@ -49,40 +27,73 @@ client.buttons = new Collection();
 client.modals = new Collection();
 
 // Load commands
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+async function loadCommands() {
+  try {
+    const commandsPath = path.join(__dirname, 'commands');
+    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-for (const file of commandFiles) {
-  const filePath = path.join(commandsPath, file);
-  const command = require(filePath);
-  client.commands.set(command.data.name, command);
+    for (const file of commandFiles) {
+      try {
+        const filePath = path.join(commandsPath, file);
+        const command = require(filePath);
+        if ('data' in command && 'execute' in command) {
+          client.commands.set(command.data.name, command);
+          logger.debug(`Loaded command: ${command.data.name}`);
+        } else {
+          logger.warn(`The command at ${filePath} is missing required "data" or "execute" property.`);
+        }
+      } catch (error) {
+        logger.error(`Error loading command ${file}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.error('Error loading commands:', error);
+  }
 }
 
 // Load events
-const eventsPath = path.join(__dirname, 'events');
-const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+async function loadEvents() {
+  try {
+    const eventsPath = path.join(__dirname, 'events');
+    const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
-for (const file of eventFiles) {
-  const filePath = path.join(eventsPath, file);
-  const event = require(filePath);
-  if (event.once) {
-    client.once(event.name, (...args) => event.execute(...args, client, logger));
-  } else {
-    client.on(event.name, (...args) => event.execute(...args, client, logger));
+    for (const file of eventFiles) {
+      try {
+        const filePath = path.join(eventsPath, file);
+        const event = require(filePath);
+        if (event.once) {
+          client.once(event.name, (...args) => event.execute(...args, client, logger));
+        } else {
+          client.on(event.name, (...args) => event.execute(...args, client, logger));
+        }
+        logger.debug(`Loaded event: ${event.name}`);
+      } catch (error) {
+        logger.error(`Error loading event ${file}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.error('Error loading events:', error);
   }
 }
 
 // Deploy commands
 async function deployCommands() {
   try {
-    logger.info('Started refreshing application (/) commands.');
+    logger.info('Deploying application (/) commands...');
     
     const commands = [];
+    const commandsPath = path.join(__dirname, 'commands');
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
     
     for (const file of commandFiles) {
-      const command = require(path.join(commandsPath, file));
-      commands.push(command.data.toJSON());
+      try {
+        const command = require(path.join(commandsPath, file));
+        if ('data' in command && 'execute' in command) {
+          commands.push(command.data.toJSON());
+        }
+      } catch (error) {
+        logger.error(`Error processing command ${file}:`, error);
+      }
     }
 
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
@@ -91,102 +102,38 @@ async function deployCommands() {
       Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID, process.env.DISCORD_GUILD_ID),
       { body: commands },
     );
-
+    
+    logger.info(`Successfully deployed ${commands.length} application commands.`);
   } catch (error) {
-    logger.error('Failed to register commands:', error);
+    logger.error('Failed to deploy commands:', error);
     throw error;
   }
-}
-
-// Initialize command handlers
-function initializeCommandHandlers() {
-  // Store command instances in a Collection
-  const commands = new Collection();
-  
-  // Add webhook commands
-  const webhookCommands = {
-    'webhook-add': new WebhookAddCommand(),
-    'webhook-list': new WebhookListCommand(),
-    'webhook-test': new WebhookTestCommand(),
-    'webhook-delete': new WebhookDeleteCommand(),
-    'webhook-send': new WebhookSendCommand()
-  };
-  
-  // Add commands to collection
-  for (const [name, command] of Object.entries(webhookCommands)) {
-    commands.set(name, command);
-  }
-  
-  // Handle slash command interactions
-  client.on(Events.InteractionCreate, async interaction => {
-    if (!interaction.isCommand()) return;
-    
-    const command = commands.get(interaction.commandName);
-    
-    if (!command) {
-      logger.error(`No command matching ${interaction.commandName} was found.`);
-      return;
-    }
-    
-    try {
-      // Check permissions
-      const { hasPermission, reason } = await command.checkPermissions(interaction, client);
-      
-      if (!hasPermission) {
-        return interaction.reply({
-          content: `❌ ${reason || 'You do not have permission to use this command.'}`,
-          ephemeral: true
-        });
-      }
-      
-      // Execute the command
-      await command.execute(interaction, client, logger);
-      
-    } catch (error) {
-      logger.error(`Error executing command ${interaction.commandName}:`, error);
-      
-      try {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({
-            content: '❌ There was an error executing this command!',
-            ephemeral: true
-          });
-        } else {
-          await interaction.reply({
-            content: '❌ There was an error executing this command!',
-            ephemeral: true
-          });
-        }
-      } catch (e) {
-        logger.error('Failed to send error message:', e);
-      }
-    }
-  });
-  
-  logger.info('Command handlers initialized');
-  return commands;
 }
 
 // Initialize database and start bot
 async function initialize() {
   try {
-    // Initialize database
+    // Initialize database connection
+    logger.info('Initializing database connection...');
     await sequelize.authenticate();
-    logger.info('Database connection has been established successfully.');
-    
-    // Sync models
+    logger.info('Database connection established successfully.');
+
+    // Sync database models
+    logger.info('Synchronizing database models...');
     await sequelize.sync({ alter: true });
-    logger.info('Database synchronized');
-    
-    // Initialize command handlers
-    initializeCommandHandlers();
-    
-    // Register commands
-    await registerCommands();
-    
-    // Start bot
+    logger.info('Database synchronized.');
+
+    // Load commands and events
+    logger.info('Loading commands and events...');
+    await loadCommands();
+    await loadEvents();
+
+    // Deploy commands
+    await deployCommands();
+
+    // Login to Discord
+    logger.info('Logging in to Discord...');
     await client.login(process.env.DISCORD_BOT_TOKEN);
-    logger.info(`Logged in as ${client.user.tag}`);
     
     // Set bot presence
     client.user.setPresence({
@@ -194,8 +141,19 @@ async function initialize() {
       status: 'online'
     });
     
+    logger.info(`Logged in as ${client.user.tag}`);
+
+    // Start health monitor if configured
+    if (process.env.COMMAND_CENTER_CHANNEL_ID) {
+      logger.info('Starting health monitor...');
+      const healthMonitor = new HealthMonitor();
+      await healthMonitor.start();
+      logger.info('Health monitor started');
+    } else {
+      logger.warn('Health monitor not started: COMMAND_CENTER_CHANNEL_ID not set');
+    }
   } catch (error) {
-    logger.error('Error initializing bot:', error);
+    logger.error('Failed to initialize application:', error);
     process.exit(1);
   }
 }
@@ -203,6 +161,8 @@ async function initialize() {
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
+  // Consider whether to exit the process here
+  // process.exit(1);
 });
 
 process.on('unhandledRejection', (error) => {
@@ -210,4 +170,7 @@ process.on('unhandledRejection', (error) => {
 });
 
 // Start the application
-initialize();
+initialize().catch(error => {
+  logger.error('Fatal error during initialization:', error);
+  process.exit(1);
+});

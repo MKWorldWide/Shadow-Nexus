@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const logger = require('../../utils/logger')('commands:base');
+const { createLogger } = require('../../utils/logger');
+const logger = createLogger('commands:base');
 const { CommandLog } = require('../../models');
 
 class BaseCommand {

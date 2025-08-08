@@ -1,142 +1,215 @@
-const { DataTypes, Op } = require('sequelize');
-const sequelize = require('../services/database');
-const logger = require('../utils/logger')('models:scheduledNote');
-const templateService = require('../services/templateService');
-const { parseCondition } = require('../utils/conditionParser');
+const { DataTypes } = require('sequelize');
 
-const ScheduledNote = sequelize.define('ScheduledNote', {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
-  },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true,
-    validate: {
-      notEmpty: true,
+module.exports = (sequelize) => {
+  const logger = require('../config/logger')('scheduledNote');
+  const templateService = require('../services/templateService');
+  const { parseCondition } = require('../utils/conditionParser');
+
+  const ScheduledNote = sequelize.define('ScheduledNote', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-  },
-  content: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-    validate: {
-      notEmpty: true,
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: {
+        notEmpty: true,
+      },
     },
-  },
-  schedule: {
-    type: DataTypes.STRING, // CRON expression or 'interval:Xh'
-    allowNull: false,
-    defaultValue: '0 9 * * *', // 9 AM daily
-  },
-  tags: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
-    defaultValue: [],
-  },
-  isActive: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: true,
-  },
-  lastSent: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  nextSend: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  webhookIds: {
-    type: DataTypes.ARRAY(DataTypes.STRING), // Specific webhook IDs to send to
-    defaultValue: [],
-  },
-  metadata: {
-    type: DataTypes.JSONB,
-    defaultValue: {},
-  },
-  templateVariables: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    defaultValue: {},
-    comment: 'Variables available in template processing',
-    get() {
-      const value = this.getDataValue('templateVariables') || {};
-      return typeof value === 'string' ? JSON.parse(value) : value;
+    content: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
     },
-  },
-  condition: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Conditional expression to determine if the note should execute',
-  },
-  executionCount: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-    comment: 'Number of times the note has been executed',
-  },
-  lastExecutionStatus: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    comment: 'Status of the last execution (success/failed)',
-  },
-  lastExecutionError: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Error message if last execution failed',
-  },
-  lastExecutionTime: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'When the note was last executed',
-  },
-  nextExecutionTime: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'When the note is scheduled to run next',
-  },
-  isWaitingForDependencies: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false,
-    comment: 'Whether execution is waiting for dependencies',
-  },
-}, {
-  timestamps: true,
-  indexes: [
-    {
-      fields: ['nextExecutionTime'],
-      where: { isActive: true },
-      name: 'scheduled_notes_next_execution_idx',
+    schedule: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: '0 9 * * *', // 9 AM daily
+      comment: 'CRON expression or interval for scheduling',
     },
-    {
-      fields: ['isWaitingForDependencies'],
-      where: { isActive: true },
-      name: 'scheduled_notes_waiting_deps_idx',
-    },
-  ],
-  hooks: {
-    beforeSave: async (note) => {
-      try {
-        // Validate schedule format (CRON or interval:Xh)
-        if (!/^(\*|([0-9]|1[0-9]|2[0-3])h|(\*|(\*\/\d+)|(\d+(,\d+)*))\s+(\*|(\*\/\d+)|(\d+(,\d+)*))\s+(\*|(\*\/\d+)|(\d+(,\d+)*))\s+(\*|(\*\/\d+)|(\d+(,\d+)*))\s+(\*|(\*\/\d+)|(\d+(,\d+)*)))$/i.test(note.schedule)) {
-          throw new Error('Invalid schedule format. Use CRON expression or interval in hours (e.g., "2h")');
+    tags: {
+      type: DataTypes.TEXT,
+      defaultValue: '[]',
+      get() {
+        const rawValue = this.getDataValue('tags');
+        try {
+          return JSON.parse(rawValue);
+        } catch (e) {
+          return [];
         }
-
-        // Process template content if it contains variables
-        if (note.content && (note.content.includes('{{') || note.content.includes('}}'))) {
+      },
+      set(value) {
+        this.setDataValue('tags', JSON.stringify(Array.isArray(value) ? value : []));
+      },
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      field: 'is_active',
+    },
+    last_sent: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'last_sent',
+    },
+    next_send: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'next_send',
+    },
+    webhook_ids: {
+      type: DataTypes.TEXT,
+      defaultValue: '[]',
+      get() {
+        const rawValue = this.getDataValue('webhook_ids');
+        try {
+          return JSON.parse(rawValue);
+        } catch (e) {
+          return [];
+        }
+      },
+      set(value) {
+        this.setDataValue('webhook_ids', JSON.stringify(Array.isArray(value) ? value : []));
+      },
+      comment: 'Specific webhook IDs to send to',
+    },
+    metadata: {
+      type: DataTypes.TEXT,
+      defaultValue: '{}',
+      get() {
+        const rawValue = this.getDataValue('metadata');
+        try {
+          return JSON.parse(rawValue);
+        } catch (e) {
+          return {};
+        }
+      },
+      set(value) {
+        this.setDataValue('metadata', JSON.stringify(value || {}));
+      },
+    },
+    template_variables: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: '{}',
+      field: 'template_variables',
+      comment: 'Variables available in template processing',
+      get() {
+        const rawValue = this.getDataValue('template_variables');
+        try {
+          return rawValue ? JSON.parse(rawValue) : {};
+        } catch (e) {
+          return {};
+        }
+      },
+      set(value) {
+        this.setDataValue('template_variables', JSON.stringify(value || {}));
+      },
+    },
+    condition: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Conditional expression to determine if the note should execute',
+    },
+    execution_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'execution_count',
+      comment: 'Number of times the note has been executed',
+    },
+    last_execution_status: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'last_execution_status',
+      comment: 'Status of the last execution (success/failed)',
+    },
+    last_execution_error: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'last_execution_error',
+      comment: 'Error message if last execution failed',
+    },
+    last_execution_time: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'last_execution_time',
+      comment: 'When the note was last executed',
+    },
+    next_execution_time: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'next_execution_time',
+      comment: 'When the note is scheduled to run next',
+    },
+    is_waiting_for_dependencies: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_waiting_for_dependencies',
+      comment: 'Whether execution is waiting for dependencies',
+    },
+  }, {
+    tableName: 'scheduled_notes',
+    timestamps: true,
+    paranoid: true,
+    underscored: true,
+    indexes: [
+      { fields: ['is_active'] },
+      { fields: ['next_execution_time'] },
+      { fields: ['last_execution_status'] },
+    ],
+    hooks: {
+      beforeSave: async (note) => {
+        if (note.changed('content')) {
           try {
-            // Just validate the template syntax, don't process variables yet
-            templateService.process(note.content, { ...(note.templateVariables || {}) }, note.id);
+            // Process template variables if any
+            const templateVars = note.template_variables || {};
+            if (Object.keys(templateVars).length > 0) {
+              note.content = templateService.render(note.content, templateVars);
+            }
+            
+            // Parse and validate condition if present
+            if (note.condition) {
+              try {
+                parseCondition(note.condition);
+              } catch (error) {
+                logger.error(`Invalid condition in scheduled note ${note.id}:`, error);
+                throw new Error(`Invalid condition: ${error.message}`);
+              }
+            }
           } catch (error) {
-            throw new Error(`Invalid template syntax: ${error.message}`);
+            logger.error('Error processing scheduled note:', error);
+            throw error;
           }
         }
-      } catch (error) {
-        logger.error('Error validating scheduled note:', error);
-        throw error;
-      }
+      },
     },
-  },
-});
+  });
 
-module.exports = ScheduledNote;
+  // Add instance methods
+  ScheduledNote.prototype.addExecutionLog = async function(status, error = null) {
+    this.execution_count = (this.execution_count || 0) + 1;
+    this.last_execution_status = status;
+    this.last_execution_time = new Date();
+    
+    if (error) {
+      this.last_execution_error = error.message || String(error);
+    }
+    
+    await this.save();
+  };
+
+  ScheduledNote.prototype.scheduleNextRun = async function() {
+    // This would be implemented based on the schedule field
+    // For now, we'll just set it to null
+    this.next_execution_time = null;
+    await this.save();
+  };
+
+  return ScheduledNote;
+};

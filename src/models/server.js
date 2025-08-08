@@ -29,7 +29,7 @@ module.exports = (sequelize) => {
       defaultValue: true
     },
     settings: {
-      type: DataTypes.JSONB,
+      type: DataTypes.JSON,
       defaultValue: {
         prefix: '!',
         language: 'en-US',

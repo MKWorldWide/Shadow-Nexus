@@ -38,8 +38,15 @@ module.exports = (sequelize) => {
       defaultValue: true
     },
     tags: {
-      type: DataTypes.ARRAY(DataTypes.STRING),
-      defaultValue: []
+      type: DataTypes.JSON,
+      defaultValue: [],
+      get() {
+        const rawValue = this.getDataValue('tags');
+        return Array.isArray(rawValue) ? rawValue : [];
+      },
+      set(value) {
+        this.setDataValue('tags', Array.isArray(value) ? value : []);
+      }
     },
     metadata: {
       type: DataTypes.JSONB,

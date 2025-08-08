@@ -1,27 +1,9 @@
 const { Sequelize } = require('sequelize');
 const path = require('path');
-const winston = require('winston');
+const { createLogger } = require('../config/logger');
 
-// Configure logger for database operations
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'database' },
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ 
-      filename: process.env.LOG_FILE_PATH || 'logs/database.log',
-      maxsize: 5 * 1024 * 1024, // 5MB
-      maxFiles: 5,
-      tailable: true
-    })
-  ]
-});
+// Create a logger instance for database operations
+const logger = createLogger('database');
 
 // Initialize Sequelize with SQLite for development
 const sequelize = new Sequelize({
@@ -50,10 +32,12 @@ async function testConnection() {
 
 // Define models
 const models = {
-  Webhook: require('../../models/webhook')(sequelize, Sequelize),
-  Server: require('../../models/server')(sequelize, Sequelize),
-  CommandLog: require('../../models/command_log')(sequelize, Sequelize),
-  // Add more models as needed
+  Webhook: require('../models/webhook')(sequelize),
+  Server: require('../models/server')(sequelize),
+  CommandLog: require('../models/command_log')(sequelize),
+  AuditLog: require('../models/auditLog')(sequelize),
+  ScheduledNote: require('../models/scheduledNote')(sequelize),
+  AthenaLog: require('../models/athenaLog')(sequelize),
 };
 
 // Set up model associations
