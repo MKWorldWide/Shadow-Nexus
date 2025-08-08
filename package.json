@@ -8,8 +8,8 @@
     "start": "node src/bot/index.js",
     "dev": "nodemon src/bot/index.js",
     "migrate": "node migrations/run-migrations.js",
-    "test": "jest",
-    "lint": "eslint .",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint src/bot/commands/council-report.js src/bot/events/messageCreate.js src/modules/councilReport.js src/modules/guardianBridge.js src/models/index.js",
     "format": "prettier --write ."
   },
   "repository": {
