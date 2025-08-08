@@ -7,6 +7,7 @@ const path = require('path');
 const logger = require('../config/logger');
 const { sequelize } = require('../services/database');
 const HealthMonitor = require('../services/healthMonitor');
+const { scheduleNightlyCouncilReport } = require('../modules/councilReport');
 
 // Log startup
 logger.info('Starting Shadow Nexus bot...');
@@ -152,6 +153,9 @@ async function initialize() {
     } else {
       logger.warn('Health monitor not started: COMMAND_CENTER_CHANNEL_ID not set');
     }
+
+    // Schedule nightly council report for system status updates
+    scheduleNightlyCouncilReport(client);
   } catch (error) {
     logger.error('Failed to initialize application:', error);
     process.exit(1);

@@ -36,6 +36,11 @@ Advanced AI Command & Control System with Forex Trading, Data Retrieval, and Inf
 - Secure command routing and verification
 - Async support for real-time operations
 
+### Council Report & Guardian Bridge
+- Automated nightly report delivering system health and recent commit summaries
+- Manual `/council report` slash command for on-demand status checks
+- Guardian bridge to relay Discord messages into Unity guardians
+
 ## Installation
 
 1. Install Poetry for dependency management:
@@ -79,6 +84,13 @@ Required environment variables:
 
 ### Discord Integration
 - `DISCORD_BOT_TOKEN`: Discord bot token
+
+### Council Report & Guardian Bridge
+- `MCP_URL`: Base URL of the MCP server for health queries
+- `COUNCIL_CHANNEL_ID`: Discord channel ID for report delivery
+- `LILYBEAR_WEBHOOK`: Optional webhook for sending reports as Lilybear
+- `NAV_REPOS`: Comma-separated GitHub repositories to include in the digest
+- `GUARDIAN_BRIDGE_URL`: HTTP endpoint to forward guardian messages
 
 ### Telegram Integration
 - `TELEGRAM_BOT_TOKEN`: Telegram bot token
