@@ -33,7 +33,7 @@
     "@discordjs/rest": "^1.7.0",
     "discord-api-types": "^0.37.39",
     "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1",
+    "dotenv": "^17.2.1",
     "sqlite3": "^5.1.6",
     "sequelize": "^6.35.1",
     "winston": "^3.11.0",
