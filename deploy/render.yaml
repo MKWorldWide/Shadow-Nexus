@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: shadow-nexus
+    env: node
+    plan: free
+    buildCommand: npm ci || npm install
+    startCommand: npm start || node index.js || npm run dev
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: LOG_LEVEL
+        value: info
