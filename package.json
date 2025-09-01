@@ -32,7 +32,7 @@
   "dependencies": {
     "@discordjs/rest": "^2.5.1",
     "discord-api-types": "^0.38.21",
-    "discord.js": "^14.14.1",
+    "discord.js": "^14.22.1",
     "dotenv": "^17.2.1",
     "sqlite3": "^5.1.6",
     "sequelize": "^6.35.1",
